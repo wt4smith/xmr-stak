@@ -29,7 +29,7 @@ R"===(
 #define cryptonight_monero_v8 11
 #define cryptonight_superfast 12
 #define cryptonight_gpu 13
-#define cryptonight_turtle 14
+#define cryptonight_conceal 14
 
 /* For Mesa clover support */
 #ifdef cl_clang_storage_class_specifiers
@@ -575,6 +575,29 @@ __kernel void JOIN(cn0,ALGO)(__global ulong *input, __global uint4 *Scratchpad, 
 )==="
 R"===(
 
+#if(ALGO == cryptonight_conceal)
+inline float4 _mm_add_ps(float4 a, float4 b)
+{
+	return a + b;
+}
+
+inline float4 _mm_mul_ps(float4 a, float4 b)
+{
+	//#pragma OPENCL SELECT_ROUNDING_MODE rte
+	return a * b;
+}
+
+inline float4 _mm_and_ps(float4 a, int b)
+{
+	return as_float4(as_int4(a) & (int4)(b));
+}
+
+inline float4 _mm_or_ps(float4 a, int b)
+{
+	return as_float4(as_int4(a) | (int4)(b));
+}
+#endif 
+
 // __NV_CL_C_VERSION checks if NVIDIA opencl is used
 #if(ALGO == cryptonight_monero_v8 && defined(__NV_CL_C_VERSION))
 #	define SCRATCHPAD_CHUNK(N) (*(__local uint4*)((__local uchar*)(scratchpad_line) + (idxS ^ (N << 4))))
@@ -592,6 +615,9 @@ __kernel void JOIN(cn1,ALGO) (__global uint4 *Scratchpad, __global ulong *states
 )
 {
 	ulong a[2];
+#if(ALGO == cryptonight_conceal)
+	float4 conc_var = (float4)(0.0f);
+#endif
 
 #if(ALGO == cryptonight_monero_v8)
 	ulong b[4];
@@ -695,6 +721,21 @@ __kernel void JOIN(cn1,ALGO) (__global uint4 *Scratchpad, __global ulong *states
 #endif
 
 			((uint4 *)c)[0] = SCRATCHPAD_CHUNK(0);
+
+#if(ALGO == cryptonight_conceal)
+			float4 r  = convert_float4_rte(((int4 *)c)[0]);
+			float4 c_old = conc_var;
+			r = _mm_add_ps(r, conc_var);
+			r = _mm_mul_ps(r, _mm_mul_ps(r, r));
+			r = _mm_and_ps(r, 0x807FFFFF);
+			r = _mm_or_ps(r, 0x40000000);
+			conc_var = _mm_add_ps(conc_var, r);
+
+			c_old = _mm_and_ps(c_old, 0x807FFFFF);
+			c_old = _mm_or_ps(c_old, 0x40000000);
+			float4 nc = _mm_mul_ps(c_old, (float4)(536870880.0f));
+			((int4 *)c)[0] ^= convert_int4_rte(nc);
+#endif
 
 #if(ALGO == cryptonight_bittube2)
 			((uint4 *)c)[0] = AES_Round2_bittube2(AES0, AES1, ~((uint4 *)c)[0], ((uint4 *)a)[0]);
