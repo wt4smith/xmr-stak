@@ -523,7 +523,15 @@ __global__ void cryptonight_core_gpu_phase2_quad(
 	uint32_t a, d[2], idx0;
 	uint32_t t1[2], t2[2], res;
 
-	float conc_var = 0.0;
+	float conc_var;
+	if(ALGO == cryptonight_conceal)
+	{
+		if(partidx != 0)
+			conc_var = int_as_float(*(d_ctx_b + threads * 4 + thread * 4 + sub));
+		else
+			conc_var = 0.0f;
+	}
+	
 	uint32_t tweak1_2[2];
 	if (ALGO == cryptonight_monero || ALGO == cryptonight_aeon || ALGO == cryptonight_ipbc || ALGO == cryptonight_stellite || ALGO == cryptonight_masari || ALGO == cryptonight_bittube2)
 	{
@@ -704,6 +712,8 @@ __global__ void cryptonight_core_gpu_phase2_quad(
 		if(ALGO == cryptonight_heavy || ALGO == cryptonight_haven || ALGO == cryptonight_bittube2 || ALGO == cryptonight_superfast)
 			if(sub&1)
 				*(d_ctx_b + threads * 4 + thread) = idx0;
+		if(ALGO == cryptonight_conceal)
+			*(d_ctx_b + threads * 4 + thread * 4 + sub) = float_as_int(conc_var);
 	}
 }
 
